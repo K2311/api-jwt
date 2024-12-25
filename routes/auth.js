@@ -34,28 +34,52 @@ router.post('/login',async (req,res)=>{
         return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    const accessToken = jwt.sign({username},process.env.JWT_SECRET,{ expiresIn: process.env.JWT_EXPIRES_IN });
-    const refreshToken = jwt.sign({ username }, process.env.REFRESH_TOKEN_SECRET);
-    refreshTokens.push(refreshToken);
+    const accessToken = jwt.sign(
+        {username},
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
+    const refreshToken = jwt.sign(
+        { username }, 
+        process.env.REFRESH_TOKEN_SECRET
+    );
+    //refreshTokens.push(refreshToken);
+    res.cookie('refreshToken',refreshToken,{
+        httpOnly:true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/token',
+
+    });
     res.json({ accessToken, refreshToken });
 });
 
-router.post('/token',(req,res)=>{
-    const { token } = req.body;
-    if(!token || !refreshTokens.includes(token)){
-        return res.status(403).json({ message: 'Forbidden' });
+router.post('/token', (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+    //const { refreshToken } = req.cookies;
+    console.log(refreshToken);
+    if (!refreshToken) {
+        return res.status(403).json({ message: 'Refresh token not found' });
     }
 
-    jwt.verify(token, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ message: 'Forbidden' });
+    jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ message: 'Invalid refresh token' });
+
         const accessToken = jwt.sign({ username: user.username }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
         res.json({ accessToken });
     });
 });
 
+
 router.post('/logout', (req, res) => {
-    const { token } = req.body;
-    refreshTokens = refreshTokens.filter(t => t !== token);
+    //const { token } = req.body;
+    //refreshTokens = refreshTokens.filter(t => t !== token);
+    res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/token',
+    });
     res.json({ message: 'Logged out successfully' });
 });
 
